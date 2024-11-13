@@ -40,6 +40,7 @@
     },
     "dependencies": {
         "@cord.network/sdk": "0.9.3-1rc20",
-        "moment": "^2.29.4"
+        "moment": "^2.29.4",
+        "jose": "^5.0.0s"
     }
 }

@@ -1,6 +1,8 @@
 import { base58Encode } from '@polkadot/util-crypto';
 import dayjs from 'moment';
 
+import { SignJWT } from 'jose';
+
 import * as Cord from '@cord.network/sdk';
 
 import { verifyDataStructure } from '@cord.network/statement';
@@ -21,6 +23,7 @@ import {
     AccountId,
     blake2AsHex,
     ApiPromise,
+    CordKeyringPair
 } from '@cord.network/types';
 
 import {
@@ -180,6 +183,114 @@ export async function addProof(
     vc['proof'] = [proof0];
     if (proof1) vc.proof.push(proof1);
     if (proof2) vc.proof.push(proof2);
+
+    return vc;
+}
+
+/* Create JWS for the VC */
+async function createJWS(digest: string, keyPair: CordKeyringPair, privateKey: any): Promise<string> {
+    const header = {
+        alg: 'EdDSA',
+        kid: keyPair.address // Looks like `kId` is an identifer for the public key/key-pair.
+    };
+
+    /* Create the JWS */
+    const jws = await new SignJWT({ digest })
+        .setProtectedHeader(header)
+        .sign(privateKey);
+
+    return jws;
+}
+
+/* TODO: not sure why, the sign() of the key is giving the same output if treated as a function,
+   but when compared with output of locally created sign, they are different */
+export async function addProofWithJWS(
+    vc: VerifiableCredential,
+    callbackFn: SignCallback,
+    issuerDid: Cord.DidDocument,
+    network: ApiPromise,
+    keyPair: CordKeyringPair,
+    options: any,
+) {
+    const now = dayjs();
+    let credHash: Cord.HexString = calculateVCHash(vc, undefined);
+    let genesisHash: string = await Cord.getGenesisHash(network);
+    
+    /* TODO: Bring selective disclosure here */
+    let proof2: CordSDRProof2024 | undefined = undefined;
+    if (options.needSDR) {
+        let contents = { ...vc.credentialSubject };
+        delete contents.id;
+
+        let hashes = hashContents(contents, options.schemaUri);
+
+        /* proof 2 - ConentNonces for selective disclosure */
+        /* This will enable the selective disclosure. This may not be compatible with the normal VC */
+        /* This also would change the 'credentialSubject' */
+        proof2 = {
+            type: 'CordSDRProof2024',
+            defaultDigest: credHash,
+            hashes: hashes.hashes,
+            nonceMap: hashes.nonceMap,
+            genesisHash: genesisHash,
+        };
+        let vocabulary = `${options.schemaUri}#`;
+        vc.credentialSubject['@context'] = { vocab: vocabulary };
+        credHash = calculateVCHash(vc, hashes.hashes);
+    }
+    vc.credentialHash = credHash;
+
+    /* proof 0 - Ed25519 */
+    /* validates ownership by checking the signature against the DID */
+
+    let cbData = await callbackFn(vc.credentialHash);
+
+    let proof0: ED25519Proof = {
+        type: 'Ed25519Signature2020',
+        created: now.toDate().toString(),
+        proofPurpose: cbData.keyType,
+        verificationMethod: cbData.keyUri,
+        proofValue: 'z' + base58Encode(cbData.signature),
+        challenge: undefined,
+    };
+
+    /* proof 1 - CordProof */
+    /* contains check for revoke */
+    let proof1: CordProof2024 | undefined = undefined;
+    if (options.needStatementProof) {
+        // SDK Method Name: Cord.statement.buildFromProperties //
+        const statementEntry = buildCordProof(
+            vc.credentialHash,
+            options.spaceUri!,
+            issuerDid.uri,
+            options.schemaUri ?? undefined,
+        );
+        let elem = statementEntry.elementUri.split(':');
+        proof1 = {
+            type: 'CordProof2024',
+            elementUri: statementEntry.elementUri,
+            spaceUri: statementEntry.spaceUri,
+            schemaUri: statementEntry.schemaUri,
+            creatorUri: issuerDid.uri,
+            digest: vc.credentialHash,
+            identifier: `${elem[0]}:${elem[1]}:${elem[2]}`,
+            genesisHash: genesisHash
+        };
+
+        vc.id = proof1.identifier;
+    }
+
+    vc['proof'] = [proof0];
+    if (proof1) vc.proof.push(proof1);
+    if (proof2) vc.proof.push(proof2);
+
+    /* Add JWS */
+    /* TODO:
+     * Extract private-key to sign
+     */
+    let privateKey;
+    const jws = await createJWS(vc.credentialHash, keyPair, privateKey);
+    vc['proof'][0]['jws'] = jws;
 
     return vc;
 }
