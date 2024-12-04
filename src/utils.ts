@@ -34,6 +34,33 @@ export function calculateVCHash(
     return credHash;
 }
 
+export function calculateAffinidiVCHash(
+    vc: VerifiableCredential,
+    contentHashes: Cord.HexString[] | undefined,
+): Cord.HexString {
+    const { issuanceDate, expirationDate, issuer, credentialSubject, holder } =
+        vc;
+
+    let newCredContent: IContents = {
+        issuanceDate,
+        expirationDate,
+        issuer,
+        credentialSubject,
+    };
+    if (contentHashes) {
+        newCredContent = {
+            issuanceDate,
+            expirationDate,
+            issuer,
+            holder: holder.id,
+            contentHashes,
+        };
+    }
+    const serializedCred = Cord.Utils.Crypto.encodeObjectAsStr(newCredContent);
+    const credHash = Cord.Utils.Crypto.hashStr(serializedCred);
+    return credHash;
+}
+
 function jsonLDcontents(
     contents: IContents,
     schemaId: string,
