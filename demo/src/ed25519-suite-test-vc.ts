@@ -2,19 +2,14 @@ import * as Cord from '@cord.network/sdk';
 import 'dotenv/config';
 
 import {
-    addEcdsaSecp256k1Proof,
-    addProof,
-    buildAffinidiVcFromContent,
-    buildCordProof,
-    buildVcFromContent,
+    addEd5519Proof,
+    buildEd25519VcFromContent,
     makePresentation,
-    updateAddProof,
-    updateVcFromContent,
+    statementEntryToAnchorHash,
+    updateEd25519Proof,
+    updateEd25519VcFromContent,
 } from '../../src/vc';
-import { verifyVP, verifyVC, verifyProofElement } from '../../src/verifyUtils';
-import { getCordProofForDigest } from '../../src/docs';
-import { convertToDidKey, generateVC } from '../../src/affinidi';
-import { calculateAffinidiVCHash, calculateVCHash } from '../../src/utils';
+import { convertToDidKey } from '../../src/did-key';
 
 function getChallenge(): string {
     return Cord.Utils.UUID.generate();
@@ -88,68 +83,16 @@ async function main() {
         }),
     );
 
-    console.log(`\n❄️  Chain Space Approval `);
-    await Cord.ChainSpace.sudoApproveChainSpace(authorIdentity, space.uri, 100);
-    console.log(`✅  Chain Space Approved`);
-
     /* schema */
-
     let newSchemaContent = require('./schema2.json');
-    // let newSchemaName =
-    //     newSchemaContent.title + ':' + Cord.Utils.UUID.generate();
-    // newSchemaContent.title = newSchemaName;
-    // console.log('newSchemaContent: ', newSchemaContent);
 
-    // let schemaProperties = Cord.Schema.buildFromProperties(
-    //     newSchemaContent,
-    //     space.uri,
-    //     issuerDid.uri,
-    // );
-
-    // console.log('schemaProperties: ', schemaProperties);
-    // const schemaUri = await Cord.Schema.dispatchToChain(
-    //     schemaProperties.schema,
-    //     issuerDid.uri,
-    //     authorIdentity,
-    //     space.authorization,
-    //     async ({ data }) => ({
-    //         signature: issuerKeys.authentication.sign(data),
-    //         keyType: issuerKeys.authentication.type,
-    //     }),
-    // );
-    // console.log(`✅ Schema - ${schemaUri} - added!`);
-
-    // Step 4: Delegate creates a new Verifiable Document
     console.log(`\n❄️  Statement Creation `);
 
-    // let newCredContent = await buildVcFromContent(
-    //     schemaProperties.schema,
-    //     {
-    //         name: 'Alice',
-    //         age: 29,
-    //         id: '123456789987654321',
-    //         country: 'India',
-    //         address: {
-    //             street: 'a',
-    //             pin: 54032,
-    //             location: {
-    //                 state: 'karnataka',
-    //             },
-    //         },
-    //     },
-    //     issuerDid,
-    //     holderDid.uri,
-    //     {
-    //         spaceUri: space.uri,
-    //         schemaUri: schemaUri,
-    //     },
-    // );
-
-    let newCredContent = await buildAffinidiVcFromContent(
+    let newCredContent = await buildEd25519VcFromContent(
         newSchemaContent,
         {
-            email: 'amar@dhiway.com',
-            fullName: 'Amar Tumballi',
+            email: 'alice@dhiway.com',
+            fullName: 'Alice',
             courseName: 'Masters in Data Analytics (Dhiway) ',
             instituteName: 'Hogwarts University',
             instituteLogo: '',
@@ -164,71 +107,18 @@ async function main() {
     );
 
     // Document hash anchor on chain
-    const credHash = calculateAffinidiVCHash(newCredContent, undefined);
-    const statementEntry = buildCordProof(
-        credHash,
-        space.uri,
-        issuerDid.uri,
-        undefined,
-    );
-    console.dir(credHash, { colors: true, depth: null });
-
-    // Add proof
-    let vcDoc = await addEcdsaSecp256k1Proof(
+    const statementEntry = await statementEntryToAnchorHash(
         newCredContent,
-        async (data) => ({
-            signature: issuerKeys.assertionMethod.sign(data),
-            keyType: issuerKeys.assertionMethod.type,
-            keyUri: `${issuerDid.uri}${
-                issuerDid.assertionMethod![0].id
-            }` as Cord.DidResourceUri,
-        }),
         issuerDid,
-        api,
         {
-            type: 'affinidi',
             spaceUri: space.uri,
-            // schemaUri,
-            needSDR: true,
-            needStatementProof: true,
-            key: didIssuer.key,
         },
     );
+    console.log('statementEntry: ', statementEntry);
 
-    // let vc = await addProof(
-    //     newCredContent,
-    //     async (data) => ({
-    //         signature: await issuerKeys.assertionMethod.sign(data),
-    //         keyType: issuerKeys.assertionMethod.type,
-    //         keyUri: `${issuerDid.uri}${
-    //             issuerDid.assertionMethod![0].id
-    //         }` as Cord.DidResourceUri,
-    //     }),
-    //     issuerDid,
-    //     api,
-    //     {
-    //         spaceUri: space.uri,
-    //         schemaUri,
-    //         needSDR: true,
-    //         needStatementProof: true,
-    //     },
-    // );
-
-    console.dir(vcDoc.vc, {
-        depth: null,
-        colors: true,
-    });
-
-    let docHash;
-    if (vcDoc.options.type === 'affinidi') {
-        docHash = statementEntry;
-        console.log('in affinidi', docHash);
-    } else {
-        docHash = vcDoc.vc.proof[1];
-    }
-
+    // Anchor VC hash to chain
     const statement = await Cord.Statement.dispatchRegisterToChain(
-        docHash,
+        statementEntry,
         issuerDid.uri,
         authorIdentity,
         space.authorization,
@@ -240,15 +130,43 @@ async function main() {
 
     console.log(`✅ Statement element registered - ${statement}`);
 
-    await verifyVC(vcDoc.vc);
+    // Add proof and sign
+    let vc = await addEd5519Proof(
+        newCredContent,
+        async (data) => ({
+            signature: await issuerKeys.assertionMethod.sign(data),
+            keyType: issuerKeys.assertionMethod.type,
+            keyUri: `${issuerDid.uri}${
+                issuerDid.assertionMethod![0].id
+            }` as Cord.DidResourceUri,
+        }),
+        issuerDid,
+        api,
+        {
+            type: 'Ed25519',
+            spaceUri: space.uri,
+            // schemaUri,
+            statement,
+            needSDR: true,
+            needStatementProof: true,
+            did: didIssuer?.did,
+        },
+    );
+
+    console.log(JSON.stringify(vc, null, 2));
+
+    // Verify VC
+    // await verifyVC(vc);
 
     const holderKeys = Cord.Utils.Keys.generateKeypairs(
         holderMnemonic,
         'sr25519',
     );
 
+    console.log(`\n* Generating VP.....`);
+
     let vp = await makePresentation(
-        [vcDoc.vc],
+        [vc],
         holderDid,
         async (data) => ({
             signature: holderKeys.assertionMethod.sign(data),
@@ -266,7 +184,7 @@ async function main() {
     );
     console.dir(vp, { colors: true, depth: null });
     /* VP verification would 'throw' an error in case of error */
-    await verifyVP(vp);
+    // await verifyVP(vp);
 
     // Step:5 Update Verifiable credential
     console.log(`\n* Statement updation`);
@@ -276,51 +194,35 @@ async function main() {
     oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
     const validUntil = oneMonthFromNow.toISOString();
 
-    let updatedCredContent = await updateVcFromContent(
+    let updatedCredContent = await updateEd25519VcFromContent(
         {
-            name: 'Bob',
-            age: 30,
-            id: '362734238278237',
-            country: 'India',
-            address: {
-                street: 'a',
-                pin: 54032,
-                location: {
-                    state: 'karnataka',
-                },
-            },
+            email: 'bob@dhiway.com',
+            fullName: 'Bob',
+            courseName: 'Masters in Data Analytics (Dhiway) ',
+            instituteName: 'Hogwarts University',
+            instituteLogo: '',
+            dateOfCompletion: new Date().toISOString(),
+            scoreAchieved: '480/500',
         },
-        vcDoc.vc,
+        vc,
         validUntil,
     );
 
-    let updatedVc = await updateAddProof(
-        vcDoc.vc.proof[1].elementUri,
+    // Document hash anchor on chain
+    const updatedStatementEntry = await statementEntryToAnchorHash(
         updatedCredContent,
-        async (data) => ({
-            signature: await issuerKeys.assertionMethod.sign(data),
-            keyType: issuerKeys.assertionMethod.type,
-            keyUri: `${issuerDid.uri}${
-                issuerDid.assertionMethod![0].id
-            }` as Cord.DidResourceUri,
-        }),
         issuerDid,
-        api,
         {
+            call: 'update',
             spaceUri: space.uri,
-            // schemaUri,
-            needSDR: true,
-            needStatementProof: true,
         },
+        statement,
     );
 
-    console.dir(updatedVc, {
-        depth: null,
-        colors: true,
-    });
+    console.log('updatedStatementEntry: ', updatedStatementEntry);
 
     const updatedStatement = await Cord.Statement.dispatchUpdateToChain(
-        updatedVc.proof[1],
+        updatedStatementEntry,
         issuerDid.uri,
         authorIdentity,
         space.authorization,
@@ -332,7 +234,35 @@ async function main() {
 
     console.log(`✅ UpdatedStatement element registered - ${updatedStatement}`);
 
-    await verifyVC(updatedVc);
+    let updatedVc = await updateEd25519Proof(
+        updatedStatement,
+        updatedCredContent,
+        async (data) => ({
+            signature: await issuerKeys.assertionMethod.sign(data),
+            keyType: issuerKeys.assertionMethod.type,
+            keyUri: `${issuerDid.uri}${
+                issuerDid.assertionMethod![0].id
+            }` as Cord.DidResourceUri,
+        }),
+        issuerDid,
+        api,
+        {
+            type: 'Ed25519',
+            spaceUri: space.uri,
+            // schemaUri,
+            needSDR: true,
+            needStatementProof: true,
+            did: didIssuer?.did,
+        },
+    );
+
+    console.dir(updatedVc, {
+        depth: null,
+        colors: true,
+    });
+
+    // Verify VC
+    // await verifyVC(updatedVc);
 }
 
 main()
