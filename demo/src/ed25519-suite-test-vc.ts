@@ -9,7 +9,7 @@ import {
     updateEd25519Proof,
     updateEd25519VcFromContent,
 } from '../../src/vc';
-import { convertToDidKey } from '../../src/did-key';
+import { convertToDidWeb } from '../../src/did-key';
 
 function getChallenge(): string {
     return Cord.Utils.UUID.generate();
@@ -52,12 +52,12 @@ async function main() {
     /*********************************************/
 
     // Issuer did:key converstion
-    const didIssuer = await convertToDidKey(issuerMnemonic);
-    console.log('Issuer did: ', didIssuer);
+    const { didDocument: didIssuer } = await convertToDidWeb(issuerDid);
+    console.log('Issuer did: ', didIssuer.id);
 
     // Holder did:key converstion
-    const didHolder = await convertToDidKey(holderMnemonic);
-    console.log('Holder did: ', didHolder);
+    const { didDocument: didHolder } = await convertToDidWeb(holderDid);
+    console.log('Holder did: ', didHolder.id);
 
     /*********************************************/
 
@@ -99,8 +99,8 @@ async function main() {
             dateOfCompletion: new Date().toISOString(),
             scoreAchieved: '450/500',
         },
-        didIssuer,
-        didHolder,
+        didIssuer.id,
+        didHolder.id,
         {
             spaceUri: space.uri,
         },
@@ -128,7 +128,7 @@ async function main() {
         }),
     );
 
-    console.log(`✅ Statement element registered - ${statement}`);
+    console.log(`✅ Statement element registered - ${statement} \n`);
 
     // Add proof and sign
     let vc = await addEd5519Proof(
@@ -149,7 +149,7 @@ async function main() {
             statement,
             needSDR: true,
             needStatementProof: true,
-            did: didIssuer?.did,
+            did: didIssuer.id,
         },
     );
 
@@ -252,7 +252,7 @@ async function main() {
             // schemaUri,
             needSDR: true,
             needStatementProof: true,
-            did: didIssuer?.did,
+            did: didIssuer.id,
         },
     );
 

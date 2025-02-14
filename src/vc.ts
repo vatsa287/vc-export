@@ -342,7 +342,7 @@ export async function buildEd25519VcFromContent(
         //     'https://cord.network/2023/cred/v1',
         // ],
         // type: ['VerifiableCredential'],
-        holder: { id: holder.did },
+        holder: { id: holder },
         credentialSubject,
         // credentialSchema: {
         //     '@id': 'https://www.w3.org/2018/credentials#credentialSchema',
@@ -350,7 +350,7 @@ export async function buildEd25519VcFromContent(
         //   },
         issuanceDate: issuanceDate,
         expirationDate: expirationDate,
-        issuer: issuer.did,
+        issuer,
         // credentialSchema: schema,
     };
     vc.credentialHash = calculateVCHash(vc, undefined);
