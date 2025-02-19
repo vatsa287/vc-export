@@ -1,6 +1,9 @@
 import * as Cord from '@cord.network/sdk';
 // import { u8aToHex } from '@cord.network/sdk';
 import { encodeAddress } from '@polkadot/util-crypto';
+import 'dotenv/config';
+
+const { WEB_URL } = process.env;
 
 // import base58 from 'bs58';
 // import {
@@ -67,10 +70,7 @@ export async function resolveDid(did: any) {
 
         let didDoc = await resolve2Did(didUri);
 
-        let id = didDoc.uri.replace(
-            'did:cord',
-            'did:web:oid4vci.demo.cord.network',
-        );
+        let id = didDoc.uri.replace('did:cord', WEB_URL);
 
         delete didDoc.uri;
         didDoc.id = id;
