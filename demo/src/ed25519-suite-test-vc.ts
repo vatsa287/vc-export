@@ -61,10 +61,6 @@ async function main() {
 
     /*********************************************/
 
-    const conformingDidDocument = Cord.Did.exportToDidDocument(
-        issuerDid,
-        'application/json',
-    );
     console.log(' \n ✅ Identities created!');
 
     console.log(`\n❄️  Chain Space Creation `);
