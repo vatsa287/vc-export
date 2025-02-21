@@ -9,7 +9,7 @@ import {
     updateEd25519Proof,
     updateEd25519VcFromContent,
 } from '../../src/vc';
-import { convertToDidWeb } from '../../src/did-key';
+import { convertToDidWeb } from '../../src/did-web';
 
 function getChallenge(): string {
     return Cord.Utils.UUID.generate();
@@ -52,12 +52,12 @@ async function main() {
     /*********************************************/
 
     // Issuer did:key converstion
-    const { didDocument: didIssuer } = await convertToDidWeb(issuerDid);
-    console.log('Issuer did: ', didIssuer.id);
+    const didIssuer = await convertToDidWeb(issuerDid);
+    console.log('Issuer did: ', didIssuer);
 
     // Holder did:key converstion
-    const { didDocument: didHolder } = await convertToDidWeb(holderDid);
-    console.log('Holder did: ', didHolder.id);
+    const didHolder = await convertToDidWeb(holderDid);
+    console.log('Holder did: ', didHolder);
 
     /*********************************************/
 
@@ -95,8 +95,8 @@ async function main() {
             dateOfCompletion: new Date().toISOString(),
             scoreAchieved: '450/500',
         },
-        didIssuer.id,
-        didHolder.id,
+        didIssuer,
+        didHolder,
         {
             spaceUri: space.uri,
         },
@@ -145,7 +145,7 @@ async function main() {
             statement,
             needSDR: true,
             needStatementProof: true,
-            did: didIssuer.id,
+            did: didIssuer,
         },
     );
 
@@ -248,7 +248,7 @@ async function main() {
             // schemaUri,
             needSDR: true,
             needStatementProof: true,
-            did: didIssuer.id,
+            did: didIssuer,
         },
     );
 
