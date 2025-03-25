@@ -684,6 +684,7 @@ export async function updateVcFromContent(
         type: ['VerifiableCredential'],
         issuer: vc.issuer,
         issuanceDate: validFromString,
+        expirationDate: validUntilString,
         credentialSubject,
         validFrom: validFromString,
         validUntil: validUntilString,
