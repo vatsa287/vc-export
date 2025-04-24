@@ -25,9 +25,11 @@ export interface CordProof2024 extends VCProofType, Cord.IStatementEntry {
     genesisHash: string;
 }
 
-export interface CordProof2025 extends VCProofType, Cord.IStatementEntryAccountType {
-    identifier: string; //Cord.StatementUri
+export interface CordProof2025 extends VCProofType, Omit<Cord.IRegistryEntry, 'blob'> {
+    //identifier: string; /* TODO: Is this user driven or the token from creation */
     genesisHash: string;
+    issuerAddress: string;
+    // blob: string | null;
 }
 
 export interface CordSDRProof2024 extends VCProofType {
@@ -44,10 +46,11 @@ export interface VerifiableCredential {
     '@context': Array<string>;
     type: Array<string>;
     issuer: string;
+    /* TODO: Check requirement of id */
     //id: string
     credentialHash: Cord.HexString;
     credentialSubject: IContents;
-    credentialSchema: Cord.ISchema | undefined;
+    credentialSchema: string | undefined;
     proof: Array<VCProof> | VCProof;
     [key: string]: any;
 }
