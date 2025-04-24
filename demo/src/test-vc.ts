@@ -3,13 +3,16 @@ import 'dotenv/config';
 
 import fs from 'fs';
 import crypto from 'crypto';
-import BN from 'bn.js';
 
-import { createAccount } from './createAccount';
+import { blake2AsHex } from '@cord.network/sdk';
+
+import { Keyring } from '@polkadot/keyring';
+import { createAccount } from '../../src/utils';
 
 import {
     addProof,
     buildVcFromContent,
+    constructCordProof2025,
     makePresentation,
     updateAddProof,
     updateVcFromContent,
@@ -17,110 +20,192 @@ import {
 
 import { verifyVP, verifyVC, verifyProofElement } from '../../src/verifyUtils';
 
-import { getCordProofForDigest } from '../../src/docs';
+const TIMEOUT = 10_000; // 10s timeout for event listeners
 
 function getChallenge(): string {
     return Cord.Utils.UUID.generate();
 }
 
+/**
+ * Waits for a specific chain event and extracts a field from its data.
+ * @param api - CORD API instance.
+ * @param eventCheck - Function to check if an event matches.
+ * @param fieldIndex - Index of the field to extract from event data.
+ * @returns Promise resolving to the extracted field value.
+ */
+async function waitForEvent(api, eventCheck, fieldIndex) {
+  return new Promise((resolve, reject) => {
+    let unsubscribe;
+    api.query.system.events((events) => {
+      events.forEach(({ phase, event }) => {
+        if (phase.isApplyExtrinsic && eventCheck(event)) {
+          console.log("event found:", event.toHuman());
+          const fieldValue = event.data[fieldIndex].toHuman();
+          resolve(fieldValue);
+          if (unsubscribe) unsubscribe();
+        }
+      });
+    }).then((unsub) => {
+      unsubscribe = unsub;
+    });
+
+    setTimeout(() => {
+      if (unsubscribe) unsubscribe();
+      reject(new Error('Timeout: Event not found'));
+    }, TIMEOUT);
+  });
+}
+
 async function main() {
-    const { NETWORK_ADDRESS, ANCHOR_URI, DID_NAME } = process.env;
-    //const networkAddress = NETWORK_ADDRESS ?? 'ws://localhost:9944';
-    //const anchorUri = ANCHOR_URI ?? '//Alice';
-    const networkAddress = 'ws://localhost:9944';
-    const anchorUri =  '//Alice';
-    const didName = DID_NAME;
+  const networkAddress = /*process.env.NETWORK_ADDRESS || */ 'ws://127.0.0.1:9944';
+  const stashUri = process.env.STASH_URI || '//Alice';
+  const TRANSFER_AMOUNT = 100 * 10 ** 12; // 30 WAY for transactions
+
+  try {
+    console.log(`\n🏦 Connecting to CORD at ${networkAddress}...`);
     Cord.ConfigService.set({ submitTxResolveOn: Cord.Chain.IS_IN_BLOCK });
-    await Cord.connect(networkAddress as string);
+    await Cord.connect(networkAddress);
 
     const api = Cord.ConfigService.get('api');
+    console.log(`✅ Connected to ${api.runtimeVersion.specName} (v${api.runtimeVersion.specVersion})`);
 
-    // Step 1: Setup Membership
-    // Setup transaction author account - CORD Account.
+    const keyring = new Keyring({ type: 'sr25519' });
+    const stash = keyring.createFromUri(stashUri);
+    console.log(`🏦 Stash: ${stash.address}`);
 
-    console.log(`\n❄️  New Network Member`);
-    const authorIdentity = Cord.Utils.Crypto.makeKeypairFromUri(
-        anchorUri as string,
-        'sr25519',
+    console.log('\n👤 Generating accounts...');
+    // Accounts[0] - Issuer, Accounts[1] - Holder
+    const accounts = [createAccount(), createAccount(), createAccount()]
+      .map(({ account }, i) => {
+        console.log(`🏦 Account ${i + 1}: ${account.address}`);
+        return account;
+      });
+
+    console.log('\n💸 Funding accounts...');
+    const fundTxs = accounts.map((account) =>
+      api.tx.balances.transferKeepAlive(account.address, TRANSFER_AMOUNT)
     );
 
-    // Create Holder DID
-    const { account: holderAccount, mnemonic: holderMnemonic } =
-        await createAccount();
+    for (const [i, tx] of fundTxs.entries()) {
+      await new Promise((resolve, reject) => {
+        tx.signAndSend(stash, ({ status, dispatchError }) => {
+          if (dispatchError) {
+            reject(new Error(`Funding account ${i + 1} failed: ${dispatchError}`));
+          } else if (status.isInBlock) {
+            console.log(`✅ Funded account ${i + 1}`);
+            resolve();
+          }
+        }).catch(reject);
+      });
+    }
 
-    // Create issuer DID
-    const { account: issuerAccount, mnemonic: issuerMnemonic } =
-        await createAccount();
-   
-      // Transfer funds for author identity.
-    let author_id_tx = await api.tx.balances.transferAllowDeath(issuerAccount.address, new BN('1000000000000000'));
-    await Cord.Chain.signAndSubmitTx(author_id_tx, authorIdentity);
+    // 📝 Profile for Account 1 ( Issuer )
+    console.log('\n📝 Creating profile for Account 1 (Issuer)...');
+    const rawProfileData1 = {
+      pub_name: 'Issuer',
+      pub_email: 'issuer@example.com',
+    };
+    const hashedProfileData1 = Object.entries(rawProfileData1).map(([key, value]) => [
+      key,
+      blake2AsHex(value),
+    ]);
 
-    author_id_tx = await api.tx.balances.transferAllowDeath(holderAccount.address, new BN('1000000000000000'));
-    await Cord.Chain.signAndSubmitTx(author_id_tx, authorIdentity);
+    await Cord.Profile.dispatchSetProfileToChain(hashedProfileData1, accounts[0]);
+    const profileIdentifier1 = await waitForEvent(
+      api,
+      (event) => api.events.profile.ProfileSet.is(event),
+      1
+    );
+    console.log(`✅ Profile set for Account 1 (Issuer) with ID: ${profileIdentifier1}`);
+
+    // 📝 Profile for Account 2 ( Holder )
+    console.log('\n📝 Creating profile for Account 2 (Holder)...');
+    const rawProfileData2 = {
+      pub_name: 'Holder',
+      pub_email: 'holder@example.com',
+    };
+    const hashedProfileData2 = Object.entries(rawProfileData2).map(([key, value]) => [
+      key,
+      blake2AsHex(value),
+    ]);
+
+    await Cord.Profile.dispatchSetProfileToChain(hashedProfileData2, accounts[1]);
+    const profileIdentifier2 = await waitForEvent(
+      api,
+      (event) => api.events.profile.ProfileSet.is(event),
+      1
+    );
+    console.log(`✅ Profile set for Account 2 (Holder) with ID: ${profileIdentifier2}`);
+
+    /* Create did based on that profile-id */
 
         /* We need to get 'DID' as a variable while issuing */
-    const issuerAccountDid = `did:web:${issuerAccount.address}.myn.social`;
-    const holderDid = `did:web:${holderAccount.address}.myn.social`;
+    // const issuerAccountDid = `did:web:${issuerAccount.address}.myn.social`;
+    // const holderDid = `did:web:${holderAccount.address}.myn.social`;
+
+    const issuerDid = 'did:cord:' + profileIdentifier1;
+    const holderDid = 'did:cord:' + profileIdentifier2;
+
+    const issuerAccount = accounts[0];
+    const holderAccount = accounts[1];
 
     console.log('✅ Identities created!');
 
-    console.log(`\n❄️  Chain Space Creation `);
-    const spaceProperties = await Cord.ChainSpace.buildFromProperties(
-        issuerAccount.address,
-        `Testing_VC_v1.${Cord.Utils.UUID.generate()}`
+    // 🔄 Create Registry
+    console.log('\n🔄 Creating registry...');
+
+    const schema = require('./schema.json');
+
+    const registryBlob = {
+      title: 'VC Export Registry',
+      schema: JSON.stringify(schema),
+      date: new Date().toISOString(),
+    };
+    const registryStringifiedBlob = JSON.stringify(registryBlob);
+    const registryTxHash = await Cord.Registry.getDigestFromRawData(registryStringifiedBlob);
+
+    const registryProperties = await Cord.Registry.registryCreateProperties(
+      registryTxHash,
+      null, // no blob
     );
+    await Cord.Registry.dispatchCreateToChain(registryProperties, accounts[0]);
 
-    console.log(`\n❄️  Chain Space Properties `);
-    const space = await Cord.ChainSpace.dispatchToChain(
-        spaceProperties,
-        issuerAccount,
-    );
+    const identifier = await waitForEvent(
+      api,
+      (event) => api.events.registry.RegistryCreated.is(event),
+      0
+    ) as string;
+    const registryId = identifier;
+    console.log(`✅ Registry created with URI: ${registryId}`);
 
-    console.log(`\n❄️  Chain Space Approval `);
-    //await Cord.ChainSpace.sudoApproveChainSpace(authorIdentity, space.uri, 100);
-    //console.log(`✅  Chain Space Approved`);
-
-    /* schema */
-    let newSchemaContent = require('./schema.json');
-    let newSchemaName =
-        newSchemaContent.title + ':' + Cord.Utils.UUID.generate();
-    newSchemaContent.title = newSchemaName;
-
-    let schemaProperties = Cord.Schema.buildFromProperties(
-        newSchemaContent,
-        issuerAccount.address,
-    );
-    const schemaUri = await Cord.Schema.dispatchToChain(
-        schemaProperties.schema,
-        issuerAccount
-    );
-    console.log(`✅ Schema - ${schemaUri} - added!`);
-
-    // Step 4: Delegate creates a new Verifiable Document
-    console.log(`\n❄️  Statement Creation `);
+    // Step 4: Issuer creates a new Verifiable Document
+    console.log('\n📝 Creating registry entry...');
 
     let newCredContent = await buildVcFromContent(
-        schemaProperties.schema,
+        // We used to add the uri of the schema for the json and send it
+        // schemaProperties.schema,
+        // Now only send raw json of schema, as we dont have the uri for it.
+        schema,
         {
             name: 'Alice',
             age: 29,
             id: '123456789987654321',
             country: 'India',
             address: {
-                street: 'a',
-                pin: 54032,
+                street: 'Central Street',
+                pin: 560032,
                 location: {
-                    state: 'karnataka',
+                    state: 'Karnataka',
                 },
             },
         },
-        issuerAccountDid,
+        issuerDid,
         holderDid,
-        {
-            spaceUri: space.uri,
-            schemaUri: schemaUri,
-        },
+        // options are also not required for now.
+        // {
+        //     spaceUri: space.uri,
+        //     schemaUri: schemaUri,
+        // },
     );
 
     let vc = await addProof(
@@ -128,16 +213,15 @@ async function main() {
         async (data) => ({
             signature: issuerAccount.sign(data),
             keyType: issuerAccount.type,
-            keyUri: `${issuerAccountDid}`,
+            keyUri: issuerAccount.address,
         }),
+        registryId,
         issuerAccount.address,
-        issuerAccountDid,
+        issuerDid,
         api,
         {
-            spaceUri: space.uri,
-            schemaUri,
             needSDR: true,
-            needStatementProof: true,
+            needEntryProof: true,
         },
     );
     console.dir(vc, {
@@ -146,16 +230,22 @@ async function main() {
     });
 
     const proof = vc.proof ? vc.proof[1]: {};
-    const statement = await Cord.Statement.dispatchRegisterToChain(
-        proof as unknown as Cord.IStatementEntry,
-        issuerAccount,
-        space.authorization,
-    );
 
-    console.log(`✅ Statement element registered - ${statement}`);
+    /* Proof contains more than required fields for IRegistryEntry but still works :) */
+    await Cord.Entry.dispatchCreateEntryToChain(proof, accounts[0]);
 
-    await verifyVC(vc);
-    console.log(`✅ VC is verified from Chain - ${statement}`);
+    const entryIdentifier = await waitForEvent(
+      api,
+      (event) => api.events.entry.RegistryEntryCreated.is(event),
+      2
+    ) as string;
+
+    console.log(`✅ Entry created with URI: ${entryIdentifier}`);
+
+    /* TODO: Check if this is the right way. If entryIdentifier has to be externally passed, since we dont have the entry-id at addProof level. */
+    await verifyVC(vc, entryIdentifier);
+
+    console.log(`✅ VC is verified from Chain - ${entryIdentifier}`);
 
     let vp = await makePresentation(
         [vc],
@@ -163,7 +253,7 @@ async function main() {
         async (data) => ({
             signature: holderAccount.sign(data),
             keyType: holderAccount.type,
-            keyUri: `${holderDid}`,
+            keyUri: holderDid,
         }),
         getChallenge(),
         api,
@@ -178,27 +268,30 @@ async function main() {
     //await verifyVP(vp);
 
     /* sample for document hash anchor on CORD */
-    const content: any = fs.readFileSync('./package.json');
-    const hashFn = crypto.createHash('sha256');
-    hashFn.update(content);
-    let digest: Cord.HexString = `0x${hashFn.digest('hex')}`;
+    /* Can be moved at last of the demo-script, so the flow is not broken */
+    // const content: any = fs.readFileSync('./package.json');
+    // let digest: Cord.HexString = Cord.blake2AsHex(content);
+    // var docProof = await constructCordProof2025(
+    //     registryId,
+    //     digest,
+    //     /* Check if profile-id or account address makes sense */
+    //     issuerAccount.address,
+    //     api,
+    // );
+    // docProof = {
+    //     ...docProof,
+    //     blob: null,
+    // }
+    // await Cord.Entry.dispatchCreateEntryToChain(docProof, accounts[0]);
+    // const entryIdentifier1 = await waitForEvent(
+    //   api,
+    //   (event) => api.events.entry.RegistryEntryCreated.is(event),
+    //   2
+    // ) as string;
+    // console.log(`✅ Entry created with URI: ${entryIdentifier1}`);
+    // await verifyProofElement(docProof, digest, undefined, entryIdentifier1);
 
-    const docProof = await getCordProofForDigest(digest, issuerAccount.address, api, {
-        spaceUri: space.uri,
-    });
-    const statement1 = await Cord.Statement.dispatchRegisterToChain(
-        docProof as unknown as Cord.IStatementEntry,
-        issuerAccount,
-        space.authorization,
-    );
-
-    console.dir(docProof, { colors: true, depth: null });
-    console.log(`✅ Statement element registered - ${statement1}`);
-
-    //await verifyProofElement(docProof, digest, undefined);
-
-    // Step:5 Update Verifiable credential
-    console.log(`\n* Statement updation`);
+    console.log("\n🔄 Updating VC...");
 
     // validUntil can be a field of choice , have set it to a month for this example
     const oneMonthFromNow = new Date();
@@ -224,20 +317,21 @@ async function main() {
     );
 
     let updatedVc = await updateAddProof(
-        vc.proof[1].elementUri,
+        registryId,
+        /* TODO: Check if passing entry-id externally from vc is correct */
+        //vc.proof[1].elementUri,
+        entryIdentifier,
         updatedCredContent,
         async (data) => ({
             signature: await issuerAccount.sign(data),
             keyType: issuerAccount.type,
-            keyUri: issuerAccountDid,
+            keyUri: issuerAccount.address,
         }),
-        issuerAccountDid,
+        issuerAccount.address,
         api,
         {
-            spaceUri: space.uri,
-            schemaUri,
             needSDR: true,
-            needStatementProof: true,
+            needEntryProof: true,
         },
     );
 
@@ -246,23 +340,24 @@ async function main() {
         colors: true,
     });
 
-    const updatedStatement = await Cord.Statement.dispatchUpdateToChain(
-        updatedVc.proof[1] as unknown as Cord.IStatementEntry,
-        issuerAccount,
-        space.authorization,
-    );
+    var updatedProof = updatedVc.proof ? updatedVc.proof[1]: {};
+    /* TODO: Check on ideal way to pass entry-id */
+    updatedProof.registryEntryId = entryIdentifier;
 
-    console.log(`✅ UpdatedStatement element registered - ${updatedStatement}`);
+    await Cord.Entry.dispatchUpdateEntryToChain(updatedProof, accounts[0]);
+    console.log(`✅ Entry updated with URI: ${entryIdentifier}`);
 
-    await verifyVC(updatedVc);
+    await verifyVC(updatedVc, entryIdentifier);
+} catch (error) {
+    console.error('❌ Error:', error instanceof Error ? error.message : error);
+  } finally {
+    console.log('\n🔌 Disconnecting from CORD...');
+    await Cord.disconnect();
+    console.log('✅ Disconnected');
+  }
 }
 
-main()
-    .then(() => console.log('\nBye! 👋 👋 👋 '))
-    .finally(Cord.disconnect);
-
-process.on('SIGINT', async () => {
-    console.log('\nBye! 👋 👋 👋 \n');
-    Cord.disconnect();
-    process.exit(0);
+main().catch((error) => {
+  console.error('❌ Unexpected error:', error instanceof Error ? error.message : error);
+  process.exit(1);
 });
