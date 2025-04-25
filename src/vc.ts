@@ -22,6 +22,7 @@ import {
 } from './types';
 
 import { hashContents, calculateVCHash, /* calculateNewVCHash */} from './utils';
+import uuid from 'uuid';
 
 // export function getUriForStatement(
 //     digest: HexString,
@@ -99,9 +100,11 @@ export async function addProof(
     /* TODO: Should below be the profile-id or the ss58 Account address */
     registryId: string,
     issuerAddress: string,
-    proofId: string, // TODO: Check -> User input instead of identifier
+    /* TODO: Should we take in ProfileId too */
+    issuerDid: string,
     network: ApiPromise,
     options: any,
+    proofId: string = uuid.v4() 
 ) {
     const now = dayjs();
     let credHash: Cord.HexString = calculateVCHash(vc, undefined);
@@ -179,7 +182,6 @@ export async function addProof(
             // blob: null,
         };
 
-        /* TODO: Before it was taken from the URI, now a field which taken as an input */
         vc.id = proofId;
     }
 

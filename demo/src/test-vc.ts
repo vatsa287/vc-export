@@ -208,6 +208,7 @@ async function main() {
         // },
     );
 
+    let proofId = "PAN-1234"
     let vc = await addProof(
         newCredContent,
         async (data) => ({
@@ -223,6 +224,7 @@ async function main() {
             needSDR: true,
             needEntryProof: true,
         },
+        proofId, /* Optional proof-id, example PAN ID */
     );
     console.dir(vc, {
         depth: null,

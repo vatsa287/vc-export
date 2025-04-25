@@ -32,16 +32,16 @@
     "license": "Apache v2.0",
     "homepage": "https://github.com/dhiway/cord.js#readme",
     "devDependencies": {
+        "@cord.network/sdk": "0.9.6-3",
         "@types/express": "^5.0.0",
         "@types/jsonabc": "^2.3.3",
         "@types/node": "^22.10.5",
         "@types/uuid": "^10.0.0",
         "dotenv": "^16.3.1",
         "jsonabc": "^2.3.1",
-        "prettier": "^3.4.1",
-        "typescript": "^5.6.2",
         "multiformats": "^9.0.0",
-        "@cord.network/sdk": "0.9.6-3"
+        "prettier": "^3.4.1",
+        "typescript": "^5.6.2"
     },
     "dependencies": {
         "@cord.network/sdk": "0.9.6-3",
@@ -54,6 +54,7 @@
         "jsonld": "^8.3.2",
         "jsonld-signatures": "^11.5.0",
         "moment": "^2.29.4",
-        "ts-node": "^10.9.1"
+        "ts-node": "^10.9.1",
+        "uuidv4": "^6.2.13"
     }
 }
