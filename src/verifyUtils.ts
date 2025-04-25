@@ -14,6 +14,8 @@ import * as Cord from '@cord.network/sdk';
 //     SchemaUri
 // } from '@cord.network/types';
 
+import { verifyAgainstInputProperties2025 } from './entryUtils';
+
 import {
     VerifiableCredential,
     VerifiablePresentation,
@@ -364,7 +366,7 @@ export async function verifyProofElement(
       //     throw 'elementUri mismatch';
       // }
       
-      const verificationResult = await Cord.Entry.verifyAgainstInputProperties(
+      const verificationResult = await verifyAgainstInputProperties2025(
         entryId as string,
         obj.tx_hash,
         /* TODO: Check if profile-id is required for verification*/
