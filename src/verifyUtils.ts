@@ -1,4 +1,4 @@
-// import { base58Decode } from '@polkadot/util-crypto';
+import { base58Decode } from '@polkadot/util-crypto';
 
 import * as Cord from '@cord.network/sdk';
 
@@ -21,7 +21,7 @@ import {
     VerifiablePresentation,
     IContents,
     VCProof,
-    // ED25519Proof,
+    ED25519Proof,
     // CordSDRProof2024,
     CordProof2024,
     CordProof2025,
@@ -320,6 +320,7 @@ export async function verifyProofElement(
     proof: VCProof,
     credHash: string | Cord.HexString | undefined,
     vc: VerifiableCredential | undefined,
+    api: Cord.ApiPromise,
     entryId?: string,
 ) {
     if (proof.type === 'CordProof2024') {
@@ -379,20 +380,23 @@ export async function verifyProofElement(
   }
   if (proof.type === 'Ed25519Signature2020') {
         /* TODO: Commenting out, fix later */
-        // let obj = proof as unknown as ED25519Proof;
-        // let signature: any = obj.proofValue;
-        // /* this 'z' is from digitalbazaar/ed25519signature2020 project */
-        // /* TODO: use the above package to verify the proof */
-        // if (signature && signature[0] !== 'z') {
-        //     throw 'proofValue not formated properly. Please refer to the standard';
-        // }
-        // let str = signature.substr(1, signature.length);
-        // /* lets convert it to uint8array, and send to verification */
-        // let message = obj.challenge ?? credHash;
-        // if (!message)
-        //     throw 'the challenge/digest passed for verification is invalid';
+        let obj = proof as unknown as ED25519Proof;
+        let signature: any = obj.proofValue;
+        /* this 'z' is from digitalbazaar/ed25519signature2020 project */
+        /* TODO: use the above package to verify the proof */
+        if (signature && signature[0] !== 'z') {
+            throw 'proofValue not formated properly. Please refer to the standard';
+        }
+        let str = signature.substr(1, signature.length);
+        /* lets convert it to uint8array, and send to verification */
+        let message = obj.challenge ?? credHash;
+        if (!message)
+            throw 'the challenge/digest passed for verification is invalid';
+        
+        /* Old way of doing it */
         // if (obj.verificationMethod && obj.verificationMethod.includes('myn.social')) {
         //   const publicKey = obj.verificationMethod.replace('did:web:','').replace('.myn.social','');
+        //   console.log("publicKey", publicKey);
         //   Cord.Utils.Crypto.verify(message, base58Decode(str), publicKey)
         // } else {
         //   await Cord.Did.verifyDidSignature({
@@ -401,6 +405,28 @@ export async function verifyProofElement(
         //     keyUri: obj.verificationMethod as unknown as Cord.DidResourceUri,
         //  });
         // }
+        
+        if (obj.verificationMethod) {
+            const profileId = obj.verificationMethod.replace('did:cord:', ''); // TODO: Handle other prefixes later
+            let profileMetadata;
+
+            try {
+                profileMetadata = await Cord.Utils.DidResolver.queryProfiles(profileId.toString(), api);
+
+                if (!profileMetadata?.latestKey) {
+                    throw new Error(`Profile's latestKey is missing for profileId: ${profileId}`);
+                }
+            } catch (error) {
+                throw new Error(`Failed to query profile ${profileId}: ${error instanceof Error ? error.message : String(error)}`);
+            } 
+
+            try {
+                Cord.Utils.Crypto.verify(message, base58Decode(str), profileMetadata.latestKey);
+            } catch (error) {
+                throw new Error(`Failed to verify signature for Profile did:cord:${profileId} ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
         /* all is good, no throw */
     }
     if (proof.type === 'CordSDRProof2024') {
@@ -428,6 +454,7 @@ export async function verifyProofElement(
 
 export async function verifyVC(
   vc: VerifiableCredential, 
+  api: Cord.ApiPromise,
   entryId?: string,
 ): Promise<void> {
     /* proof check */
@@ -436,7 +463,7 @@ export async function verifyVC(
         let hashes =
             proofs.type === 'CordSDRProof2024' ? proofs.hashes : undefined;
         let credHash = calculateVCHash(vc, hashes);
-        await verifyProofElement(vc.proof as VCProof, credHash, vc, entryId);
+        await verifyProofElement(vc.proof as VCProof, credHash, vc, api, entryId);
         return;
     }
 
@@ -466,21 +493,21 @@ export async function verifyVC(
         }
 
         if (obj.type === 'CordProof2025') {
-          await verifyProofElement(obj, credHash, vc, entryId);
+          await verifyProofElement(obj, credHash, vc, api, entryId);
         } else { 
-            await verifyProofElement(obj, credHash, vc);
+            await verifyProofElement(obj, credHash, vc, api);
         }
     }
     return;
 }
 
-export async function verifyVP(vp: VerifiablePresentation) {
+export async function verifyVP(vp: VerifiablePresentation, api: Cord.ApiPromise) {
     /* proof check */
-    await verifyProofElement(vp.proof as VCProof, undefined, undefined);
+    await verifyProofElement(vp.proof as VCProof, undefined, undefined, api);
 
     let vcs = vp.VerifiableCredential;
     for (let i = 0; i < vcs.length; i++) {
         let vc = vcs[i];
-        await verifyVC(vc);
+        await verifyVC(vc, api);
     }
 }

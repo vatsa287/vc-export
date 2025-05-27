@@ -214,7 +214,7 @@ async function main() {
         async (data) => ({
             signature: issuerAccount.sign(data),
             keyType: issuerAccount.type,
-            keyUri: issuerAccount.address,
+            keyUri: issuerDid,
         }),
         registryId,
         issuerAccount.address,
@@ -245,7 +245,7 @@ async function main() {
     console.log(`✅ Entry created with URI: ${entryIdentifier}`);
 
     /* TODO: Check if this is the right way. If entryIdentifier has to be externally passed, since we dont have the entry-id at addProof level. */
-    await verifyVC(vc, entryIdentifier);
+    await verifyVC(vc, api, entryIdentifier);
 
     console.log(`✅ VC is verified from Chain - ${entryIdentifier}`);
 
@@ -327,7 +327,7 @@ async function main() {
         async (data) => ({
             signature: await issuerAccount.sign(data),
             keyType: issuerAccount.type,
-            keyUri: issuerAccount.address,
+            keyUri: issuerDid,
         }),
         issuerAccount.address,
         api,
@@ -349,7 +349,7 @@ async function main() {
     await Cord.Entry.dispatchUpdateEntryToChain(updatedProof, accounts[0]);
     console.log(`✅ Entry updated with URI: ${entryIdentifier}`);
 
-    await verifyVC(updatedVc, entryIdentifier);
+    await verifyVC(updatedVc, api, entryIdentifier);
 } catch (error) {
     console.error('❌ Error:', error instanceof Error ? error.message : error);
   } finally {
