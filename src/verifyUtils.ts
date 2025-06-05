@@ -2,18 +2,6 @@ import { base58Decode } from '@polkadot/util-crypto';
 
 import * as Cord from '@cord.network/sdk';
 
-// import {
-//     IStatementDetails,
-//     Option,
-//     AccountId32,
-//     StatementUri,
-//     // IStatementStatus,
-//     HexString,
-//     DidUri,
-//     SpaceUri,
-//     SchemaUri
-// } from '@cord.network/types';
-
 import { verifyAgainstInputProperties2025 } from './entryUtils';
 
 import {
@@ -22,16 +10,10 @@ import {
     IContents,
     VCProof,
     ED25519Proof,
-    // CordSDRProof2024,
+    CordSDRProof2025,
     CordProof2024,
     CordProof2025,
 } from './types';
-
-// import * as Did from '@cord.network/did'
-
-// import {uriToIdentifier, uriToStatementIdAndDigest, identifierToUri} from '@cord.network/identifier';
-
-// import { SDKErrors } from '@cord.network/utils';
 
 import { makeStatementsJsonLD, calculateVCHash } from './utils';
 
@@ -261,12 +243,11 @@ export function verifyDisclosedAttributes(
     hashes: string[],
     attributes?: string[],
 ): void {
+
     // apply defaults
     // use canonicalisation algorithm to make hashable statement strings
-    // TODO: Disabled this check since schema is not supported anymore.
-    if (!schemaId) throw 'schemaId is needed for SDR verification';
 
-    const statements = makeStatementsJsonLD(content, schemaId);
+    const statements = makeStatementsJsonLD(content, undefined);
     let filteredStatements = statements;
     if (attributes && attributes.length) {
         filteredStatements = Cord.Utils.DataUtils.filterStatements(
@@ -429,26 +410,26 @@ export async function verifyProofElement(
 
         /* all is good, no throw */
     }
-    if (proof.type === 'CordSDRProof2024') {
+    if (proof.type === 'CordSDRProof2025') {
         // TOOD: Fix below method without schema-id
         // So have commented it out, fix later
 
-        // let obj = proof as unknown as CordSDRProof2024;
+        let obj = proof as unknown as CordSDRProof2025;
 
-        // /* make sure from whats is present in content, we get back the same content nonces */
-        // let subject = vc?.credentialSubject
-        //     ? { ...vc.credentialSubject }
-        //     : { id: 'dummy', '@context': 'dummy' };
-        // delete subject.id;
-        // delete subject['@context'];
+        /* make sure from whats is present in content, we get back the same content nonces */
+        let subject = vc?.credentialSubject
+            ? { ...vc.credentialSubject }
+            : { id: 'dummy', '@context': 'dummy' };
+        delete subject.id;
+        delete subject['@context'];
 
-        // verifyDisclosedAttributes(
-        //     subject,
-        //     undefined, // TODO: Check requirement of schema-id vc?.credentialSchema?.$id,
-        //     obj.nonceMap,
-        //     obj.hashes,
-        //     Object.keys(subject),
-        // );
+        verifyDisclosedAttributes(
+            subject,
+            undefined, // Sending undefined for SchemaId
+            obj.nonceMap,
+            obj.hashes,
+            Object.keys(subject),
+        );
     }
 }
 
@@ -461,7 +442,7 @@ export async function verifyVC(
     const proofs: any = vc.proof;
     if (!proofs.length) {
         let hashes =
-            proofs.type === 'CordSDRProof2024' ? proofs.hashes : undefined;
+            proofs.type === 'CordSDRProof2025' ? proofs.hashes : undefined;
         let credHash = calculateVCHash(vc, hashes);
         await verifyProofElement(vc.proof as VCProof, credHash, vc, api, entryId);
         return;
@@ -474,7 +455,7 @@ export async function verifyVC(
     for (let i = 0; i < proofs.length; i++) {
         let obj = proofs[i];
         if (!obj) continue;
-        if (obj.type === 'CordSDRProof2024') {
+        if (obj.type === 'CordSDRProof2025') {
             credHash = calculateVCHash(vc, obj.hashes);
         }
     }

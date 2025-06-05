@@ -16,7 +16,7 @@ import {
     VerifiablePresentation,
     IContents,
     ED25519Proof,
-    CordSDRProof2024,
+    CordSDRProof2025,
     CordProof2025,
     SignCallback,
 } from './types';
@@ -111,25 +111,27 @@ export async function addProof(
     let genesisHash: string = await Cord.getGenesisHash(network);
 
     /* TODO: Bring selective disclosure here */
-    let proof2: CordSDRProof2024 | undefined = undefined;
+    let proof2: CordSDRProof2025 | undefined = undefined;
     if (options.needSDR) {
         let contents = { ...vc.credentialSubject };
         delete contents.id;
 
-        let hashes = hashContents(contents, options.schemaUri);
+        let hashes = hashContents(contents, undefined);
 
         /* proof 2 - ConentNonces for selective disclosure */
         /* This will enable the selective disclosure. This may not be compatible with the normal VC */
         /* This also would change the 'credentialSubject' */
         proof2 = {
-            type: 'CordSDRProof2024',
+            type: 'CordSDRProof2025',
             defaultDigest: credHash,
             hashes: hashes.hashes,
             nonceMap: hashes.nonceMap,
             genesisHash: genesisHash,
         };
-        let vocabulary = `${options.schemaUri}#`;
-        vc.credentialSubject['@context'] = { vocab: vocabulary };
+        /* Setting context to default as in makeVP */
+        // let vocabulary = `${options.schemaUri}#`;
+        // vc.credentialSubject['@context'] = { vocab: vocabulary };
+        vc.credentialSubject['@context'] = 'https://cord.network/2023/cred/v1';
         credHash = calculateVCHash(vc, hashes.hashes);
     }
     vc.credentialHash = credHash;
@@ -206,25 +208,27 @@ export async function updateAddProof(
     let genesisHash: string = await Cord.getGenesisHash(network);
 
     /* TODO: Bring selective disclosure here */
-    let proof2: CordSDRProof2024 | undefined = undefined;
+    let proof2: CordSDRProof2025 | undefined = undefined;
     if (options.needSDR) {
         let contents = { ...vc.credentialSubject };
         delete contents.id;
 
-        let hashes = hashContents(contents, options.schemaUri);
+        let hashes = hashContents(contents, undefined);
 
         /* proof 2 - ConentNonces for selective disclosure */
         /* This will enable the selective disclosure. This may not be compatible with the normal VC */
         /* This also would change the 'credentialSubject' */
         proof2 = {
-            type: 'CordSDRProof2024',
+            type: 'CordSDRProof2025',
             defaultDigest: credHash,
             hashes: hashes.hashes,
             nonceMap: hashes.nonceMap,
             genesisHash: genesisHash,
         };
-        let vocabulary = `${options.schemaUri}#`;
-        vc.credentialSubject['@context'] = { vocab: vocabulary };
+        /* Setting context to default as in makeVP */
+        // let vocabulary = `${options.schemaUri}#`;
+        // vc.credentialSubject['@context'] = { vocab: vocabulary };
+        vc.credentialSubject['@context'] = 'https://cord.network/2023/cred/v1';
         credHash = calculateVCHash(vc, hashes.hashes);
     }
     vc.credentialHash = credHash;
