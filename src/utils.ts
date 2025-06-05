@@ -63,7 +63,7 @@ export function calculateNewVCHash(
 
 function jsonLDcontents(
     contents: IContents,
-    schemaId: string,
+    schemaId: string | undefined,
 ): Record<string, unknown> {
     const result: Record<string, unknown> = {};
 
@@ -82,7 +82,7 @@ function jsonLDcontents(
 
 export function toJsonLD(
     contents: IContents,
-    schemaId: string,
+    schemaId: string | undefined,
 ): Record<string, unknown> {
     const credentialSubject = jsonLDcontents(contents, schemaId);
     return credentialSubject;
@@ -90,7 +90,7 @@ export function toJsonLD(
 
 export function makeStatementsJsonLD(
     contents: IContents,
-    schemaId: string,
+    schemaId: string | undefined,
 ): string[] {
     const normalized = jsonLDcontents(contents, schemaId);
     return Object.entries(normalized).map(([key, value]) =>
@@ -100,7 +100,7 @@ export function makeStatementsJsonLD(
 
 export function hashContents(
     contents: IContents,
-    schemaId: string,
+    schemaId: string | undefined,
     options: Cord.Utils.Crypto.HashingOptions & {
         selectedAttributes?: string[];
     } = {},

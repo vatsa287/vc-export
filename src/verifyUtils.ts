@@ -2,6 +2,7 @@ import { base58Decode } from '@polkadot/util-crypto';
 
 import * as Cord from '@cord.network/sdk';
 
+<<<<<<< Updated upstream
 import {
     IStatementDetails,
     Option,
@@ -13,6 +14,9 @@ import {
     SpaceUri,
     SchemaUri
 } from '@cord.network/types';
+=======
+import { verifyAgainstInputProperties2025 } from './entryUtils';
+>>>>>>> Stashed changes
 
 import {
     VerifiableCredential,
@@ -20,10 +24,15 @@ import {
     IContents,
     VCProof,
     ED25519Proof,
+<<<<<<< Updated upstream
     CordSDRProof2024,
+=======
+    CordSDRProof2025,
+>>>>>>> Stashed changes
     CordProof2024,
 } from './types';
 
+<<<<<<< Updated upstream
 import * as Did from '@cord.network/did'
 
 import { decodeStatementDetailsfromChain } from '@cord.network/statement';
@@ -32,6 +41,8 @@ import {uriToIdentifier, uriToStatementIdAndDigest, identifierToUri} from '@cord
 
 import { SDKErrors } from '@cord.network/utils';
 
+=======
+>>>>>>> Stashed changes
 import { makeStatementsJsonLD, calculateVCHash } from './utils';
 
 export async function getDetailsfromChain(
@@ -197,11 +208,15 @@ export function verifyDisclosedAttributes(
     hashes: string[],
     attributes?: string[],
 ): void {
+
     // apply defaults
     // use canonicalisation algorithm to make hashable statement strings
+<<<<<<< Updated upstream
     if (!schemaId) throw 'schemaId is needed for SDR verification';
+=======
+>>>>>>> Stashed changes
 
-    const statements = makeStatementsJsonLD(content, schemaId);
+    const statements = makeStatementsJsonLD(content, undefined);
     let filteredStatements = statements;
     if (attributes && attributes.length) {
         filteredStatements = Cord.Utils.DataUtils.filterStatements(
@@ -283,7 +298,38 @@ export async function verifyProofElement(
         }
         /* all good, no throw */
     }
+<<<<<<< Updated upstream
     if (proof.type === 'Ed25519Signature2020') {
+=======
+    if (proof.type === 'CordProof2025') {
+      /* verify the proof */
+      let obj = proof as unknown as CordProof2025;
+
+      if (obj.tx_hash !== credHash) {
+          throw 'Credential Digest Mismatch';
+      }
+      
+      /* TODO: Check how can we do this, since when we create a proof, we do not have the elementUri */
+      // Currently taking it as a parameter
+      // if (
+      //     obj.elementUri !== `${obj.identifier}:${credHash.replace('0x', '')}`
+      // ) {
+      //     throw 'elementUri mismatch';
+      // }
+      
+      const verificationResult = await verifyAgainstInputProperties2025(
+        entryId as string,
+        obj.tx_hash,
+        /* TODO: Check if profile-id is required for verification*/
+      );
+
+      if (!verificationResult.isValid) {
+          throw `Failed to verify CordProof2025 ${JSON.stringify(verificationResult)}`;
+      }
+      /* all good, no throw */
+  }
+  if (proof.type === 'Ed25519Signature2020') {
+>>>>>>> Stashed changes
         let obj = proof as unknown as ED25519Proof;
         let signature: any = obj.proofValue;
         /* this 'z' is from digitalbazaar/ed25519signature2020 project */
@@ -303,8 +349,13 @@ export async function verifyProofElement(
         });
         /* all is good, no throw */
     }
+<<<<<<< Updated upstream
     if (proof.type === 'CordSDRProof2024') {
         let obj = proof as unknown as CordSDRProof2024;
+=======
+    if (proof.type === 'CordSDRProof2025') {
+        let obj = proof as unknown as CordSDRProof2025;
+>>>>>>> Stashed changes
 
         /* make sure from whats is present in content, we get back the same content nonces */
         let subject = vc?.credentialSubject
@@ -315,7 +366,11 @@ export async function verifyProofElement(
 
         verifyDisclosedAttributes(
             subject,
+<<<<<<< Updated upstream
             vc?.credentialSchema?.$id,
+=======
+            undefined, // TODO: Sending default value now, since we dont have SchemaId
+>>>>>>> Stashed changes
             obj.nonceMap,
             obj.hashes,
             Object.keys(subject),
@@ -328,7 +383,7 @@ export async function verifyVC(vc: VerifiableCredential): Promise<void> {
     const proofs: any = vc.proof;
     if (!proofs.length) {
         let hashes =
-            proofs.type === 'CordSDRProof2024' ? proofs.hashes : undefined;
+            proofs.type === 'CordSDRProof2025' ? proofs.hashes : undefined;
         let credHash = calculateVCHash(vc, hashes);
         await verifyProofElement(vc.proof as VCProof, credHash, vc);
         return;
@@ -341,7 +396,7 @@ export async function verifyVC(vc: VerifiableCredential): Promise<void> {
     for (let i = 0; i < proofs.length; i++) {
         let obj = proofs[i];
         if (!obj) continue;
-        if (obj.type === 'CordSDRProof2024') {
+        if (obj.type === 'CordSDRProof2025') {
             credHash = calculateVCHash(vc, obj.hashes);
         }
     }

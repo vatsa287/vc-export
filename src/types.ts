@@ -32,7 +32,18 @@ export interface CordSDRProof2024 extends VCProofType {
     genesisHash: string;
 }
 
+<<<<<<< Updated upstream
 export type VCProof = CordSDRProof2024 | ED25519Proof | CordProof2024;
+=======
+export interface CordSDRProof2025 extends VCProofType {
+    defaultDigest: string;
+    hashes: Array<Cord.HexString>;
+    nonceMap: Record<string, string>;
+    genesisHash: string;
+}
+
+export type VCProof = CordSDRProof2024 | CordSDRProof2025 | ED25519Proof | CordProof2024 | CordProof2025 ;
+>>>>>>> Stashed changes
 
 /* TODO: make it more clear, and better - followup PRs */
 export interface VerifiableCredential {
