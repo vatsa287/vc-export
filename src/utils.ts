@@ -1,4 +1,5 @@
 import { hexToBn } from '@polkadot/util';
+import { KeypairType } from '@polkadot/util-crypto/types';
 
 import * as Cord from '@cord.network/sdk';
 
@@ -150,17 +151,18 @@ export function hashContents(
  * @returns An object with two properties: account and mnemonic.
  */
 export function createAccount(
-  mnemonic = Cord.Utils.Crypto.mnemonicGenerate(24)
+    mnemonic = Cord.Utils.Crypto.mnemonicGenerate(24),
+    type: KeypairType = 'sr25519',
 ): {
-  account: Cord.CordKeyringPair;
-  mnemonic: string;
+    account: Cord.CordKeyringPair;
+    mnemonic: string;
 } {
-  const keyring = new Cord.Utils.Keyring({
-    ss58Format: 29,
-    type: "ed25519",
-  });
-  return {
-    account: keyring.addFromMnemonic(mnemonic) as Cord.CordKeyringPair,
-    mnemonic,
-  };
+    const keyring = new Cord.Utils.Keyring({
+        ss58Format: 29,
+        type,
+    });
+    return {
+        account: keyring.addFromMnemonic(mnemonic) as Cord.CordKeyringPair,
+        mnemonic,
+    };
 }
