@@ -33,7 +33,6 @@
     "license": "Apache v2.0",
     "homepage": "https://github.com/dhiway/cord.js#readme",
     "devDependencies": {
-        "@cord.network/sdk": "0.9.6-3",
         "@types/express": "^5.0.0",
         "@types/jsonabc": "^2.3.3",
         "@types/node": "^22.10.5",
@@ -56,6 +55,6 @@
         "jsonld-signatures": "^11.5.0",
         "moment": "^2.29.4",
         "ts-node": "^10.9.1",
-        "uuidv4": "^6.2.13"
+        "uuid": "^11.1.0"
     }
 }

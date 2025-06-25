@@ -22,7 +22,7 @@ import {
 } from './types';
 
 import { hashContents, calculateVCHash, /* calculateNewVCHash */} from './utils';
-import uuid from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 
 // export function getUriForStatement(
 //     digest: HexString,
@@ -104,7 +104,7 @@ export async function addProof(
     issuerDid: string,
     network: ApiPromise,
     options: any,
-    proofId: string = uuid.v4() 
+    proofId: string = uuidv4(),
 ) {
     const now = dayjs();
     let credHash: Cord.HexString = calculateVCHash(vc, undefined);
