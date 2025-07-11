@@ -296,11 +296,50 @@ export async function verifyProofElement(
         let message = obj.challenge ?? credHash;
         if (!message)
             throw 'the challenge/digest passed for verification is invalid';
+<<<<<<< Updated upstream
         await Cord.Did.verifyDidSignature({
             message,
             signature: base58Decode(str),
             keyUri: obj.verificationMethod as unknown as Cord.DidResourceUri,
         });
+=======
+        
+        /* Old way of doing it */
+        // if (obj.verificationMethod && obj.verificationMethod.includes('myn.social')) {
+        //   const publicKey = obj.verificationMethod.replace('did:web:','').replace('.myn.social','');
+        //   console.log("publicKey", publicKey);
+        //   Cord.Utils.Crypto.verify(message, base58Decode(str), publicKey)
+        // } else {
+        //   await Cord.Did.verifyDidSignature({
+        //     message,
+        //     signature: base58Decode(str),
+        //     keyUri: obj.verificationMethod as unknown as Cord.DidResourceUri,
+        //  });
+        // }
+        
+        if (obj.verificationMethod) {
+            const profileId = obj.verificationMethod.replace('did:cord:', ''); // TODO: Handle other prefixes later
+            console.log("profile-id", profileId);
+            let profileMetadata;
+
+            try {
+                profileMetadata = await Cord.Utils.DidResolver.queryProfiles(profileId.toString(), api);
+
+                if (!profileMetadata?.latestKey) {
+                    throw new Error(`Profile's latestKey is missing for profileId: ${profileId}`);
+                }
+            } catch (error) {
+                throw new Error(`Failed to query profile ${profileId}: ${error instanceof Error ? error.message : String(error)}`);
+            } 
+
+            try {
+                Cord.Utils.Crypto.verify(message, base58Decode(str), profileMetadata.latestKey);
+            } catch (error) {
+                throw new Error(`Failed to verify signature for Profile did:cord:${profileId} ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+>>>>>>> Stashed changes
         /* all is good, no throw */
     }
     if (proof.type === 'CordSDRProof2024') {
@@ -356,13 +395,36 @@ export async function verifyVC(vc: VerifiableCredential): Promise<void> {
     return;
 }
 
+<<<<<<< Updated upstream
 export async function verifyVP(vp: VerifiablePresentation) {
     /* proof check */
     await verifyProofElement(vp.proof as VCProof, undefined, undefined);
+=======
+export async function verifyVP(
+    vp: VerifiablePresentation, 
+    api: Cord.ApiPromise,
+    vcEntryIdMap: Record<string, string>
+) {
+    /* proof check */
+    await verifyProofElement(vp.proof as VCProof, undefined, undefined, api);
+    console.log("Verified Proof Element")
+>>>>>>> Stashed changes
 
     let vcs = vp.VerifiableCredential;
     for (let i = 0; i < vcs.length; i++) {
         let vc = vcs[i];
+<<<<<<< Updated upstream
         await verifyVC(vc);
+=======
+        const entryId = vcEntryIdMap[vc.id];
+        // TODO: Handling here will not be optimal, because
+        // the CORD-PROOF-2025 is optional, not every VC will have it.
+        // Instead handle while calling VerifyVP, if the VC's Proof object type has
+        // CordProof2025 embedded.
+        // if (!entryId || !vc.id) {
+        //     throw new Error(`Missing entry identifier for VC with ID: ${vc.id}`);
+        // }
+        await verifyVC(vc, api, entryId);
+>>>>>>> Stashed changes
     }
 }

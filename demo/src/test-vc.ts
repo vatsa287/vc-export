@@ -145,6 +145,10 @@ async function main() {
             needSDR: true,
             needStatementProof: true,
         },
+<<<<<<< Updated upstream
+=======
+        proofId, /* NEW Addition: Optional proof-id, example PAN ID */
+>>>>>>> Stashed changes
     );
     console.dir(vc, {
         depth: null,
@@ -189,8 +193,18 @@ async function main() {
         },
     );
     console.dir(vp, { colors: true, depth: null });
+<<<<<<< Updated upstream
     /* VP verification would 'throw' an error in case of error */
     await verifyVP(vp);
+=======
+
+    console.log("Verify VP")
+    // NOTE: New step of sending a record map with respective VC:EntryId's,
+    // Required since we do not have Entry Id in the VC itself.
+    // Which can be potentially solved with doken-precomputer.
+    await verifyVP(vp, api, { [vc.id]: entryIdentifier });
+    console.log("After VP verification")
+>>>>>>> Stashed changes
 
     /* sample for document hash anchor on CORD */
     const content: any = fs.readFileSync('./package.json');
